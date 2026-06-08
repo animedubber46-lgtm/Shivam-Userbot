@@ -6,6 +6,7 @@ in groups, and streams music through voice chats. No BOT_TOKEN needed.
 """
 import asyncio
 import logging
+import os
 import sys
 
 from pyrogram import Client
@@ -29,9 +30,19 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+COOKIES_FILE = os.path.join(os.path.dirname(__file__), "cookies.txt")
+
 
 async def main() -> None:
     settings.validate()
+
+    # Warn if cookies.txt is missing — YouTube will block requests without it
+    if not os.path.exists(COOKIES_FILE):
+        logger.warning(
+            "⚠️  cookies.txt not found — YouTube will block audio extraction on server IPs.\n"
+            "   Export your YouTube cookies and place them at: telegram-music-bot/cookies.txt\n"
+            "   See README.md → 'YouTube Cookies' section for instructions."
+        )
 
     await db.connect(settings.MONGO_URI, settings.DB_NAME)
     await spotify.authenticate(settings.SPOTIFY_CLIENT_ID, settings.SPOTIFY_CLIENT_SECRET)
@@ -51,12 +62,10 @@ async def main() -> None:
     # ── Single update handler for all PyTgCalls events ────────────────────────
     @calls.on_update()
     async def update_handler(client: PyTgCalls, update: Update):
-        # Track finished — advance queue
         if isinstance(update, StreamEnded):
             await voice_manager.on_stream_end(update.chat_id)
             return
 
-        # Kicked / voice chat closed — attempt reconnect
         if isinstance(update, ChatUpdate):
             disconnect_flags = (
                 ChatUpdate.Status.KICKED
@@ -70,7 +79,6 @@ async def main() -> None:
                 if not await voice_manager.try_reconnect(update.chat_id):
                     logger.warning(f"[{update.chat_id}] Could not reconnect")
 
-    # Register /play, /pause, /skip, etc. on the userbot
     register_all_handlers(userbot)
 
     logger.info("Starting Music Userbot…")
@@ -80,6 +88,8 @@ async def main() -> None:
     me = await userbot.get_me()
     logger.info(f"Logged in as: {me.first_name} (@{me.username or me.id})")
     logger.info(f"Admin IDs: {settings.ADMIN_IDS}")
+    cookies_status = "✅ cookies.txt found" if os.path.exists(COOKIES_FILE) else "❌ cookies.txt missing"
+    logger.info(f"YouTube cookies: {cookies_status}")
     logger.info("Ready. Press Ctrl+C to stop.")
 
     try:

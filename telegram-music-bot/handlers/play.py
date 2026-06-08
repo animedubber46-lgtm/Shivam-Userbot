@@ -9,6 +9,12 @@ from helpers.formatters import format_duration
 
 logger = logging.getLogger(__name__)
 
+NO_COOKIES_MSG = (
+    "⚠️ **YouTube is blocking audio extraction.**\n\n"
+    "This happens on server IPs without YouTube cookies.\n"
+    "Ask the bot admin to add `cookies.txt` — see the README for instructions."
+)
+
 
 def register_play_handlers(app: Client) -> None:
 
@@ -31,7 +37,7 @@ def register_play_handlers(app: Client) -> None:
 
         tracks_to_add: list[dict] = []
 
-        # ── Spotify URL → fetch rich metadata, then find audio on YouTube ─────
+        # ── Spotify URL → rich metadata, audio sourced from YouTube ──────────
         sp_parsed = spotify.parse_spotify_url(query)
         if sp_parsed:
             sp_type, sp_id = sp_parsed
@@ -48,10 +54,9 @@ def register_play_handlers(app: Client) -> None:
                     tracks_to_add = await spotify.get_album_tracks(sp_id)
             except Exception as exc:
                 logger.warning(f"Spotify metadata fetch failed: {exc}")
-                # Fall through — treat it as a plain YouTube search
-                sp_parsed = None
+                sp_parsed = None  # fall through to YouTube search
 
-        # ── Plain text → search YouTube directly (no Spotify needed) ──────────
+        # ── Plain text → search YouTube directly ──────────────────────────────
         if not sp_parsed:
             await status_msg.edit("🔍 Searching YouTube…")
             yt_results = await youtube.search(query, max_results=1)
@@ -75,13 +80,12 @@ def register_play_handlers(app: Client) -> None:
 
         state = voice_manager.get_state(chat_id)
         added_count = 0
+        cookies_error = False
 
         for meta in tracks_to_add:
-            # Use pre-resolved YouTube URL if available (plain-text search path)
             yt_url = meta.pop("youtube_url", None)
 
             if not yt_url:
-                # Spotify metadata path — find the matching YouTube video
                 yt_result = await youtube.find_for_track(meta["title"], meta["artist"])
                 if not yt_result:
                     logger.warning(f"No YouTube match for {meta['title']}")
@@ -90,6 +94,7 @@ def register_play_handlers(app: Client) -> None:
 
             audio_url = await youtube.get_stream_url(yt_url)
             if not audio_url:
+                cookies_error = True
                 continue
 
             track = Track(
@@ -106,7 +111,11 @@ def register_play_handlers(app: Client) -> None:
             added_count += 1
 
         if added_count == 0:
-            await status_msg.edit("❌ Could not find playable audio for the requested tracks.")
+            # Give a helpful error if the issue is cookies vs. a genuine miss
+            if cookies_error:
+                await status_msg.edit(NO_COOKIES_MSG)
+            else:
+                await status_msg.edit("❌ Could not find playable audio. Try a different query.")
             return
 
         await db.set_queue(chat_id, [t.to_dict() for t in state.tracks])
