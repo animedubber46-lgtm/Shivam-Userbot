@@ -1,9 +1,9 @@
-# Core Telegram framework
-Pyrogram==2.0.106
+# Pyrogram fork required by py-tgcalls 2.x (same 'pyrogram' import name, drop-in replacement)
+pyrofork==2.3.69
 TgCrypto==1.2.5
 
 # Voice chat streaming
-py-tgcalls==0.9.30
+py-tgcalls==2.3.0
 
 # Spotify API
 spotipy==2.24.0
@@ -15,7 +15,7 @@ yt-dlp==2024.12.23
 motor==3.7.0
 pymongo==4.10.1
 
-# HTTP client (used by SpotifyService for raw API calls)
+# HTTP client
 aiohttp==3.11.11
 
 # Environment variable loading
