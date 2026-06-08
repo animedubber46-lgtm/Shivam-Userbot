@@ -26,10 +26,12 @@ def register_play_handlers(app: Client) -> None:
             return
 
         query = " ".join(args).strip()
+        # Single initial status message — never edit it to the same text again
         status_msg = await message.reply("🔍 Searching…")
         chat_id = message.chat.id
 
         tracks_to_add: list[dict] = []
+        used_spotify = False
 
         # ── Spotify URL → rich metadata, audio sourced from SoundCloud ─────────
         sp_parsed = spotify.parse_spotify_url(query)
@@ -40,19 +42,20 @@ def register_play_handlers(app: Client) -> None:
                     t = await spotify.get_track(sp_id)
                     if t:
                         tracks_to_add = [t]
+                        used_spotify = True
                 elif sp_type == "playlist":
                     await status_msg.edit("📋 Loading Spotify playlist…")
                     tracks_to_add = await spotify.get_playlist_tracks(sp_id)
+                    used_spotify = True
                 elif sp_type == "album":
                     await status_msg.edit("💿 Loading Spotify album…")
                     tracks_to_add = await spotify.get_album_tracks(sp_id)
+                    used_spotify = True
             except Exception as exc:
                 logger.warning(f"Spotify metadata fetch failed: {exc}")
-                sp_parsed = None  # fall through to SoundCloud search
 
-        # ── Plain text → search SoundCloud directly ───────────────────────────
-        if not sp_parsed:
-            await status_msg.edit("🔍 Searching…")
+        # ── Plain text or failed Spotify → search SoundCloud ─────────────────
+        if not used_spotify:
             sc_results = await youtube.search(query, max_results=1)
             if sc_results:
                 r = sc_results[0]
@@ -62,7 +65,7 @@ def register_play_handlers(app: Client) -> None:
                     "duration": r["duration"],
                     "album": "",
                     "thumbnail": r.get("thumbnail", ""),
-                    "stream_url": r["stream_url"],  # already extracted by scsearch
+                    "stream_url": r["stream_url"],
                 }]
             else:
                 await status_msg.edit("❌ No results found. Try a different search term.")
@@ -76,7 +79,6 @@ def register_play_handlers(app: Client) -> None:
         added_count = 0
 
         for meta in tracks_to_add:
-            # Use pre-extracted stream_url if present (plain-text path)
             audio_url = meta.pop("stream_url", None)
 
             # Spotify path: find audio on SoundCloud using track metadata
@@ -108,7 +110,6 @@ def register_play_handlers(app: Client) -> None:
 
         await db.set_queue(chat_id, [t.to_dict() for t in state.tracks])
 
-        # Start playback if not already playing
         if not state.is_playing:
             current = state.current_track
             if current:
