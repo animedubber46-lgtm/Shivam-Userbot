@@ -9,9 +9,9 @@ from helpers.formatters import format_queue
 logger = logging.getLogger(__name__)
 
 
-def register_queue_handlers(bot: Client) -> None:
+def register_queue_handlers(app: Client) -> None:
 
-    @bot.on_message(filters.command("queue") & filters.group)
+    @app.on_message(filters.command("queue") & filters.group & filters.incoming)
     @rate_limit(seconds=5)
     @error_handler
     async def queue_cmd(client: Client, message: Message):

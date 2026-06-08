@@ -10,12 +10,12 @@ from helpers.formatters import format_duration
 logger = logging.getLogger(__name__)
 
 
-def register_play_handlers(bot: Client) -> None:
-    @bot.on_message(filters.command("play") & filters.group)
+def register_play_handlers(app: Client) -> None:
+
+    @app.on_message(filters.command("play") & filters.group & filters.incoming)
     @rate_limit(seconds=3)
     @error_handler
     async def play_cmd(client: Client, message: Message):
-        from config import settings
         from database import db
         from services import spotify, youtube
         from voice import voice_manager
@@ -57,7 +57,6 @@ def register_play_handlers(bot: Client) -> None:
             if sp_track:
                 tracks_to_add = [sp_track]
             else:
-                # Direct YouTube search as last resort
                 yt_results = await youtube.search(query, max_results=1)
                 if yt_results:
                     r = yt_results[0]
@@ -78,7 +77,6 @@ def register_play_handlers(bot: Client) -> None:
         added_count = 0
 
         for meta in tracks_to_add:
-            # Find YouTube audio source
             yt_url = meta.pop("youtube_url", None)
             if not yt_url:
                 yt_result = await youtube.find_for_track(meta["title"], meta["artist"])
@@ -108,11 +106,7 @@ def register_play_handlers(bot: Client) -> None:
             await status_msg.edit("❌ Could not find playable audio for the requested tracks.")
             return
 
-        # Persist queue
-        await db.set_queue(
-            chat_id,
-            [t.to_dict() for t in state.tracks],
-        )
+        await db.set_queue(chat_id, [t.to_dict() for t in state.tracks])
 
         # Start playback if not already playing
         if not state.is_playing:
@@ -121,7 +115,6 @@ def register_play_handlers(bot: Client) -> None:
                 success = await voice_manager.play(chat_id, current)
                 if success:
                     await db.record_play(chat_id, current.to_dict())
-                    thumbnail = current.thumbnail
                     caption = (
                         f"🎵 **Now Playing**\n"
                         f"**{current.title}**\n"
@@ -130,15 +123,19 @@ def register_play_handlers(bot: Client) -> None:
                     )
                     if added_count > 1:
                         caption += f"\n\n📋 +{added_count - 1} more tracks queued"
-                    if thumbnail:
+                    if current.thumbnail:
                         await status_msg.delete()
-                        await message.reply_photo(thumbnail, caption=caption)
+                        await message.reply_photo(current.thumbnail, caption=caption)
                     else:
                         await status_msg.edit(caption)
                 else:
-                    await status_msg.edit("❌ Failed to join voice chat. Make sure one is active.")
+                    await status_msg.edit(
+                        "❌ Failed to join voice chat. Make sure a voice chat is active in this group."
+                    )
         else:
-            msg = f"➕ Added **{tracks_to_add[0].get('title', 'track')}** to the queue"
-            if added_count > 1:
-                msg = f"➕ Added **{added_count} tracks** to the queue"
+            msg = (
+                f"➕ Added **{tracks_to_add[0].get('title', 'track')}** to the queue"
+                if added_count == 1
+                else f"➕ Added **{added_count} tracks** to the queue"
+            )
             await status_msg.edit(msg)

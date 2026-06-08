@@ -3,14 +3,14 @@ import logging
 from pyrogram import Client, filters
 from pyrogram.types import Message
 
-from helpers.decorators import error_handler, rate_limit, admin_only
+from helpers.decorators import error_handler, rate_limit
 
 logger = logging.getLogger(__name__)
 
 
-def register_playlist_handlers(bot: Client) -> None:
+def register_playlist_handlers(app: Client) -> None:
 
-    @bot.on_message(filters.command("playlist") & filters.group)
+    @app.on_message(filters.command("playlist") & filters.group & filters.incoming)
     @rate_limit(seconds=3)
     @error_handler
     async def playlist_cmd(client: Client, message: Message):
@@ -62,7 +62,9 @@ def register_playlist_handlers(bot: Client) -> None:
                 await message.reply("⚠️ The queue is empty. Nothing to save.")
                 return
             await db.save_playlist(user_id, name, [t.to_dict() for t in state.tracks])
-            await message.reply(f"✅ Saved **{len(state.tracks)} tracks** as playlist \"**{name}**\".")
+            await message.reply(
+                f"✅ Saved **{len(state.tracks)} tracks** as playlist \"**{name}**\"."
+            )
 
         elif sub == "load":
             if len(args) < 2:
@@ -74,12 +76,13 @@ def register_playlist_handlers(bot: Client) -> None:
                 await message.reply(f"❌ Playlist \"**{name}**\" not found.")
                 return
 
-            status_msg = await message.reply(f"⏳ Loading playlist \"**{name}**\" ({len(tracks_data)} tracks)…")
+            status_msg = await message.reply(
+                f"⏳ Loading playlist \"**{name}**\" ({len(tracks_data)} tracks)…"
+            )
             state = voice_manager.get_state(chat_id)
             loaded = 0
 
             for td in tracks_data:
-                # Re-resolve audio URL in case it expired
                 yt_result = await youtube.find_for_track(td["title"], td["artist"])
                 if not yt_result:
                     continue
@@ -105,7 +108,9 @@ def register_playlist_handlers(bot: Client) -> None:
                         f"✅ Loaded {loaded} tracks. Use /play to start (no active voice chat found)."
                     )
             else:
-                await status_msg.edit(f"➕ Added {loaded} tracks from \"**{name}**\" to the queue.")
+                await status_msg.edit(
+                    f"➕ Added {loaded} tracks from \"**{name}**\" to the queue."
+                )
 
         elif sub == "delete":
             if len(args) < 2:

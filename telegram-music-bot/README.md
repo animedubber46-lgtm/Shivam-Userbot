@@ -1,20 +1,39 @@
-# 🎵 Telegram Music Bot
+# 🎵 Telegram Music Userbot
 
-A production-ready Telegram music bot that streams audio through group voice chats using your own Telegram account (userbot). Powered by Spotify metadata, YouTube audio, and MongoDB for persistence.
+Your own Telegram account connects to group voice chats and streams music on command. No separate bot account needed — you are the bot.
+
+Powered by Spotify metadata → YouTube audio → PyTgCalls streaming, with MongoDB for queue and playlist persistence.
+
+---
+
+## How it works
+
+```
+Someone types /play bohemian rhapsody in a group
+        ↓
+Your Telegram account (running on a server) sees the message
+        ↓
+Searches Spotify for metadata, finds audio on YouTube
+        ↓
+Your account joins the group voice chat and starts streaming
+        ↓
+Auto-advances through the queue until it's empty, then leaves
+```
 
 ---
 
 ## Features
 
-- **Spotify integration** — search by name or paste a Spotify track/playlist/album URL
+- **Pure userbot** — runs as your Telegram account, no BOT_TOKEN required
+- **Spotify search** — by name, or paste a Spotify track / playlist / album URL
 - **YouTube audio** — automatically finds the best YouTube match for every Spotify track
-- **Voice chat streaming** — streams through your Telegram account at high quality (192 kbps)
-- **Persistent queue** — survives restarts; per-group queue stored in MongoDB
-- **Saved playlists** — users can save, load, and manage personal playlists
-- **Admin controls** — pause, skip, stop, volume, shuffle are admin-only per group
-- **Auto-reconnect** — reconnects automatically if dropped from a voice chat
-- **Multi-group** — runs in multiple groups simultaneously
-- **Async architecture** — fully async, efficient memory usage
+- **High-quality streaming** — 192 kbps audio through group voice chats
+- **Persistent queue** — survives restarts; queue stored in MongoDB per group
+- **Saved playlists** — save, load, and manage named playlists
+- **Admin controls** — destructive commands require group admin status
+- **Auto-reconnect** — rejoins voice chat if disconnected
+- **Multi-group** — runs simultaneously in any number of groups
+- **Fully async** — efficient memory usage, no blocking
 
 ---
 
@@ -22,37 +41,41 @@ A production-ready Telegram music bot that streams audio through group voice cha
 
 | Command | Description | Admin only? |
 |---|---|---|
-| `/play <song or URL>` | Play a song, or load a Spotify track/playlist/album | No |
-| `/pause` | Pause playback | Yes |
-| `/resume` | Resume playback | Yes |
-| `/skip` | Skip to the next track | Yes |
-| `/stop` | Stop and clear the queue | Yes |
+| `/play <song or URL>` | Play a song or load a Spotify track/playlist/album | No |
+| `/pause` | Pause playback | ✅ |
+| `/resume` | Resume playback | ✅ |
+| `/skip` | Skip to the next track | ✅ |
+| `/stop` | Stop and clear the queue | ✅ |
 | `/queue [page]` | Show the queue | No |
-| `/nowplaying` | Show the current track with progress | No |
-| `/volume [0-200]` | Get or set volume | Yes |
-| `/shuffle` | Shuffle the queue | Yes |
+| `/nowplaying` | Show current track with progress bar | No |
+| `/volume [0-200]` | Get or set volume | ✅ |
+| `/shuffle` | Shuffle the remaining queue | ✅ |
 | `/playlist list` | List your saved playlists | No |
 | `/playlist save <name>` | Save current queue as a playlist | No |
 | `/playlist load <name>` | Load a saved playlist | No |
 | `/playlist delete <name>` | Delete a saved playlist | No |
-| `/help` | Show help message | No |
+| `/help` | Show help | No |
+
+> **Admin** = Telegram group admin, or a user ID listed in `ADMIN_IDS`.  
+> Add your own user ID to `ADMIN_IDS` so you always have full control.
 
 ---
 
 ## Prerequisites
 
-- Python 3.12+
-- FFmpeg installed on the host
-- MongoDB (local or Atlas)
-- A Telegram account (for the userbot)
-- A Telegram bot (from @BotFather)
-- Spotify Developer App (free)
+| Requirement | How to get it |
+|---|---|
+| Python 3.12+ | https://python.org |
+| FFmpeg | `sudo apt install ffmpeg` / `brew install ffmpeg` |
+| MongoDB | Local install or free [MongoDB Atlas](https://mongodb.com/atlas) |
+| Telegram API credentials | https://my.telegram.org/apps |
+| Spotify Developer App | https://developer.spotify.com/dashboard (free) |
 
 ---
 
-## Quick Start
+## Setup
 
-### 1. Clone & install dependencies
+### 1. Install dependencies
 
 ```bash
 git clone <repo-url>
@@ -68,29 +91,28 @@ pip install -r requirements.txt
 
 ```bash
 cp .env.example .env
+# Open .env and fill in all values
 ```
 
-Edit `.env` and fill in every value (see [Environment Variables](#environment-variables) below).
+### 3. Get your STRING_SESSION
 
-### 3. Generate your STRING_SESSION
-
-The userbot needs a session string from your Telegram account:
+This is a one-time step. Run:
 
 ```bash
 python generate_session.py
 ```
 
-Log in with your phone number when prompted. Copy the printed session string into `STRING_SESSION` in `.env`.
+Log in with your phone number when prompted. Copy the printed session string into `STRING_SESSION` in your `.env`.
 
-> ⚠️ **Keep STRING_SESSION secret.** It grants full access to your Telegram account.
+> ⚠️ **Keep STRING_SESSION secret.** Anyone who has it can access your Telegram account.
 
-### 4. Run the bot
+### 4. Start the userbot
 
 ```bash
 python main.py
 ```
 
-Add the bot to a group, start a voice chat, then send `/play <song name>`.
+Go to a Telegram group you're in, start a voice chat, then type `/play <song name>`.
 
 ---
 
@@ -100,75 +122,83 @@ Add the bot to a group, start a voice chat, then send `/play <song name>`.
 |---|---|---|
 | `API_ID` | ✅ | From https://my.telegram.org/apps |
 | `API_HASH` | ✅ | From https://my.telegram.org/apps |
-| `BOT_TOKEN` | ✅ | From @BotFather |
 | `STRING_SESSION` | ✅ | Generated by `generate_session.py` |
 | `SPOTIFY_CLIENT_ID` | ✅ | Spotify Developer Dashboard |
 | `SPOTIFY_CLIENT_SECRET` | ✅ | Spotify Developer Dashboard |
 | `MONGO_URI` | ✅ | MongoDB connection string |
 | `DB_NAME` | ❌ | Database name (default: `music_bot`) |
+| `CMD_PREFIX` | ❌ | Command prefix (default: `/`) |
 | `DEFAULT_VOLUME` | ❌ | Default volume 0-200 (default: `100`) |
-| `AUDIO_QUALITY` | ❌ | Audio bitrate kbps (default: `192`) |
-| `ADMIN_IDS` | ❌ | Comma-separated global admin user IDs |
-| `LOG_LEVEL` | ❌ | `DEBUG`/`INFO`/`WARNING` (default: `INFO`) |
+| `AUDIO_QUALITY` | ❌ | Audio kbps: 128 / 192 / 320 (default: `192`) |
+| `ADMIN_IDS` | ❌ | Comma-separated Telegram user IDs with admin access |
+| `LOG_LEVEL` | ❌ | `DEBUG` / `INFO` / `WARNING` (default: `INFO`) |
+
+### Finding your Telegram user ID
+
+Message [@userinfobot](https://t.me/userinfobot) on Telegram — it replies with your numeric user ID. Add that to `ADMIN_IDS`.
 
 ### Getting Spotify credentials
 
 1. Go to https://developer.spotify.com/dashboard
-2. Click **Create App**
-3. Give it any name and description
-4. Set Redirect URI to `http://localhost:8888/callback`
-5. Copy your **Client ID** and **Client Secret**
+2. Click **Create App** (free)
+3. Set Redirect URI to `http://localhost:8888/callback`
+4. Copy **Client ID** and **Client Secret** into `.env`
 
 ---
 
 ## Deployment
 
-### Docker (recommended)
+### Docker (recommended for servers)
 
 ```bash
-# Build and start (includes a local MongoDB)
+# Builds the image and starts MongoDB alongside the userbot
 docker-compose up -d
 
-# View logs
+# Follow logs
 docker-compose logs -f bot
 
 # Stop
 docker-compose down
 ```
 
+The `docker-compose.yml` includes a bundled MongoDB container so you don't need to install it separately.
+
 ### Railway
 
-1. Push your code to a GitHub repo
-2. Create a new Railway project and connect the repo
-3. Add all environment variables in Railway's dashboard
-4. Add a **MongoDB** plugin in Railway (copy the `MONGO_URL` it provides into `MONGO_URI`)
+1. Push this folder to a GitHub repo
+2. Create a new Railway project → Connect repo
+3. Add a **MongoDB** plugin (Railway provides the connection string)
+4. Set all environment variables in Railway's dashboard
 5. Railway detects the `Dockerfile` and deploys automatically
 
-The `railway.json` file in the repo pre-configures the build and restart settings.
+The included `railway.json` pre-configures restart policy and build settings.
 
-### VPS (Ubuntu/Debian)
+### VPS (Ubuntu/Debian) — systemd service
 
 ```bash
-# 1. Install system dependencies
+# 1. System dependencies
 sudo apt update && sudo apt install -y python3.12 python3.12-venv ffmpeg
 
-# 2. Install MongoDB
-curl -fsSL https://pgp.mongodb.com/server-7.0.asc | sudo gpg -o /usr/share/keyrings/mongodb-server-7.0.gpg --dearmor
-echo "deb [ signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list
+# 2. MongoDB
+curl -fsSL https://pgp.mongodb.com/server-7.0.asc \
+  | sudo gpg -o /usr/share/keyrings/mongodb-server-7.0.gpg --dearmor
+echo "deb [ signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] \
+  https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" \
+  | sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list
 sudo apt update && sudo apt install -y mongodb-org
-sudo systemctl start mongod && sudo systemctl enable mongod
+sudo systemctl enable --now mongod
 
-# 3. Clone and set up the bot
+# 3. Clone and install
 git clone <repo-url>
 cd telegram-music-bot
 python3.12 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env   # fill in your values
 
-# 4. Run as a systemd service
-sudo tee /etc/systemd/system/musicbot.service > /dev/null <<EOF
+# 4. Systemd service
+sudo tee /etc/systemd/system/musicbot.service <<EOF
 [Unit]
-Description=Telegram Music Bot
+Description=Telegram Music Userbot
 After=network.target mongod.service
 
 [Service]
@@ -185,28 +215,27 @@ EOF
 
 sudo systemctl daemon-reload
 sudo systemctl enable --now musicbot
-sudo journalctl -u musicbot -f   # follow logs
+
+# Follow logs
+sudo journalctl -u musicbot -f
 ```
 
 ### Replit
 
-1. Create a new Replit project with Python 3.12
-2. Upload all files from this directory
-3. In the **Secrets** panel, add all required environment variables
-4. Install system packages by adding to `replit.nix`:
+1. Create a Replit project with Python 3.12
+2. Upload this folder's contents
+3. Add a `replit.nix` file:
 
 ```nix
 { pkgs }: {
-  deps = [
-    pkgs.python312
-    pkgs.ffmpeg
-  ];
+  deps = [ pkgs.python312 pkgs.ffmpeg ];
 }
 ```
 
+4. Add all environment variables in Replit's **Secrets** panel
 5. Set the run command to `python main.py`
 
-> **Note:** Replit free tier sleeps after inactivity. Use a paid plan or an external uptime monitor (e.g., UptimeRobot) to keep it awake.
+> Free Replit projects sleep after inactivity. Use [UptimeRobot](https://uptimerobot.com) (free) to ping your Repl every 5 minutes to keep it awake.
 
 ---
 
@@ -214,8 +243,8 @@ sudo journalctl -u musicbot -f   # follow logs
 
 ```
 telegram-music-bot/
-├── main.py                  # Entry point — starts all clients
-├── generate_session.py      # One-time script to get STRING_SESSION
+├── main.py                  # Entry point — your account + voice client startup
+├── generate_session.py      # One-time: generates your STRING_SESSION
 ├── requirements.txt
 ├── Dockerfile
 ├── docker-compose.yml
@@ -224,16 +253,16 @@ telegram-music-bot/
 │
 ├── config/
 │   ├── __init__.py
-│   └── settings.py          # All env-var configuration
+│   └── settings.py          # All configuration (reads from .env)
 │
 ├── database/
 │   ├── __init__.py
-│   ├── mongodb.py           # Async MongoDB client wrapper
+│   ├── mongodb.py           # Async MongoDB client (queue, playlists, stats)
 │   └── models.py            # Track and QueueState dataclasses
 │
 ├── handlers/
-│   ├── __init__.py          # Registers all handlers
-│   ├── play.py              # /play command
+│   ├── __init__.py          # Registers all handlers with the userbot
+│   ├── play.py              # /play
 │   ├── controls.py          # /pause /resume /skip /stop /volume /nowplaying /shuffle
 │   ├── queue.py             # /queue
 │   ├── playlist.py          # /playlist
@@ -246,70 +275,36 @@ telegram-music-bot/
 │
 ├── services/
 │   ├── __init__.py
-│   ├── spotify.py           # Spotify Web API client
-│   └── youtube.py           # yt-dlp wrapper for search & streaming
+│   ├── spotify.py           # Spotify Web API — search, track, playlist, album
+│   └── youtube.py           # yt-dlp — search, stream URL, download
 │
 ├── voice/
 │   ├── __init__.py
-│   └── manager.py           # PyTgCalls voice chat management & queue state
+│   └── manager.py           # PyTgCalls wrapper — join, play, pause, skip, auto-advance
 │
-└── logs/                    # Runtime log files
+└── logs/                    # Runtime log output
 ```
-
----
-
-## Architecture
-
-```
-User sends /play  ──→  Bot client (Pyrogram)
-                              │
-                    handlers/play.py
-                              │
-                    ┌─────────┴─────────┐
-                    │                   │
-              SpotifyService      YouTubeService
-              (metadata)         (audio URL/download)
-                    │                   │
-                    └─────────┬─────────┘
-                              │
-                        Track object
-                              │
-                       VoiceManager
-                       (adds to queue)
-                              │
-                        PyTgCalls
-                    (streams via userbot)
-                              │
-                    Telegram Voice Chat
-```
-
-- The **bot client** receives commands from users
-- The **userbot** (string session) actually joins voice chats and streams audio
-- **SpotifyService** resolves metadata; **YouTubeService** fetches the playable audio URL
-- **VoiceManager** maintains in-memory `QueueState` per chat and drives PyTgCalls
-- **MongoDB** persists queues, playlists, settings, and play statistics across restarts
 
 ---
 
 ## Troubleshooting
 
-**`FloodWait` errors** — Telegram is rate-limiting your account. The bot will automatically wait and retry.
-
-**`NotInCallError`** — Make sure an active voice chat exists in the group before using `/play`.
-
-**FFmpeg not found** — Install FFmpeg: `sudo apt install ffmpeg` (Linux) or `brew install ffmpeg` (macOS).
-
-**Spotify 401 errors** — Your Spotify token expires after 1 hour. The bot re-authenticates automatically on the next command.
-
-**MongoDB connection refused** — Check that MongoDB is running (`systemctl status mongod`) and `MONGO_URI` is correct.
-
-**Audio is choppy** — Try lowering `AUDIO_QUALITY` to `128` in `.env`, or ensure your server has stable internet connectivity.
+| Problem | Fix |
+|---|---|
+| `NotInCallError` | Start a voice chat in the group first, then use `/play` |
+| `FloodWait` errors | Telegram is rate-limiting. The bot waits automatically |
+| FFmpeg not found | `sudo apt install ffmpeg` or `brew install ffmpeg` |
+| MongoDB connection refused | Check `MONGO_URI` and that MongoDB is running |
+| Spotify 401 errors | Token expired — the bot re-authenticates automatically |
+| Audio is choppy | Lower `AUDIO_QUALITY` to `128` in `.env`, or check your server's network |
+| `STRING_SESSION` invalid | Re-run `generate_session.py` to get a fresh session |
 
 ---
 
-## Security Notes
+## Security
 
 - Never commit `.env` to version control (it's in `.gitignore`)
-- `STRING_SESSION` grants full access to your Telegram account — treat it like a password
-- `ADMIN_IDS` should include your personal Telegram user ID so you retain control across all groups
-- The Docker image runs as a non-root user for safety
+- `STRING_SESSION` = full access to your Telegram account — treat it like a password
+- Add your user ID to `ADMIN_IDS` to keep full control in every group
+- The Docker image runs as a non-root user
+- Secrets are read from environment variables only — never hardcoded

@@ -9,9 +9,9 @@ from helpers.formatters import format_now_playing
 logger = logging.getLogger(__name__)
 
 
-def register_control_handlers(bot: Client) -> None:
+def register_control_handlers(app: Client) -> None:
 
-    @bot.on_message(filters.command("pause") & filters.group)
+    @app.on_message(filters.command("pause") & filters.group & filters.incoming)
     @admin_only
     @error_handler
     async def pause_cmd(client: Client, message: Message):
@@ -22,7 +22,7 @@ def register_control_handlers(bot: Client) -> None:
         else:
             await message.reply("⚠️ Nothing is playing or already paused.")
 
-    @bot.on_message(filters.command("resume") & filters.group)
+    @app.on_message(filters.command("resume") & filters.group & filters.incoming)
     @admin_only
     @error_handler
     async def resume_cmd(client: Client, message: Message):
@@ -33,7 +33,7 @@ def register_control_handlers(bot: Client) -> None:
         else:
             await message.reply("⚠️ Not paused.")
 
-    @bot.on_message(filters.command("skip") & filters.group)
+    @app.on_message(filters.command("skip") & filters.group & filters.incoming)
     @admin_only
     @error_handler
     async def skip_cmd(client: Client, message: Message):
@@ -46,7 +46,7 @@ def register_control_handlers(bot: Client) -> None:
         else:
             await message.reply("⏹ Queue finished. No more tracks.")
 
-    @bot.on_message(filters.command("stop") & filters.group)
+    @app.on_message(filters.command("stop") & filters.group & filters.incoming)
     @admin_only
     @error_handler
     async def stop_cmd(client: Client, message: Message):
@@ -56,7 +56,7 @@ def register_control_handlers(bot: Client) -> None:
         await db.clear_queue(message.chat.id)
         await message.reply("⏹ Stopped and cleared the queue.")
 
-    @bot.on_message(filters.command("volume") & filters.group)
+    @app.on_message(filters.command("volume") & filters.group & filters.incoming)
     @admin_only
     @error_handler
     async def volume_cmd(client: Client, message: Message):
@@ -64,7 +64,9 @@ def register_control_handlers(bot: Client) -> None:
         args = message.command[1:]
         if not args or not args[0].isdigit():
             state = voice_manager.get_state(message.chat.id)
-            await message.reply(f"🔊 Current volume: **{state.volume}**\nUsage: `/volume 0-200`")
+            await message.reply(
+                f"🔊 Current volume: **{state.volume}**\nUsage: `/volume 0-200`"
+            )
             return
         vol = int(args[0])
         ok = await voice_manager.set_volume(message.chat.id, vol)
@@ -73,7 +75,7 @@ def register_control_handlers(bot: Client) -> None:
         else:
             await message.reply("❌ Failed to change volume. Join a voice chat first.")
 
-    @bot.on_message(filters.command("nowplaying") & filters.group)
+    @app.on_message(filters.command("nowplaying") & filters.group & filters.incoming)
     @rate_limit(seconds=5)
     @error_handler
     async def nowplaying_cmd(client: Client, message: Message):
@@ -90,7 +92,7 @@ def register_control_handlers(bot: Client) -> None:
         else:
             await message.reply(text)
 
-    @bot.on_message(filters.command("shuffle") & filters.group)
+    @app.on_message(filters.command("shuffle") & filters.group & filters.incoming)
     @admin_only
     @error_handler
     async def shuffle_cmd(client: Client, message: Message):
