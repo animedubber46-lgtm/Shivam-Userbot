@@ -1,0 +1,22 @@
+# Core Telegram framework
+Pyrogram==2.0.106
+TgCrypto==1.2.5
+
+# Voice chat streaming
+py-tgcalls==0.9.30
+
+# Spotify API
+spotipy==2.24.0
+
+# YouTube audio download & extraction
+yt-dlp==2024.12.23
+
+# MongoDB async driver
+motor==3.7.0
+pymongo==4.10.1
+
+# HTTP client (used by SpotifyService for raw API calls)
+aiohttp==3.11.11
+
+# Environment variable loading
+python-dotenv==1.0.1

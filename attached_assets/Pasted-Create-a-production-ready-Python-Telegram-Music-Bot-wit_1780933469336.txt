@@ -1,0 +1,96 @@
+Create a production-ready Python Telegram Music Bot with the following features:
+
+Requirements:
+
+* Use Python 3.12+
+* Use Pyrogram for Telegram client functionality
+* Use PyTgCalls for voice chat streaming
+* Use Spotify API for song search and metadata retrieval
+* Use YouTube as the audio source when Spotify tracks cannot be streamed directly
+* Use FFmpeg for audio processing
+* Use MongoDB for storing playlists, queue data, settings, and statistics
+
+Features:
+
+1. Userbot Integration
+
+   * Connect using my Telegram account session.
+   * My Telegram account should automatically join group voice chats.
+   * Stream music through my Telegram account in group voice chats.
+
+2. Commands
+
+   * /play song name
+   * /pause
+   * /resume
+   * /skip
+   * /stop
+   * /queue
+   * /nowplaying
+   * /volume
+   * /playlist
+   * /shuffle
+   * /help
+
+3. Music Search
+
+   * Search Spotify using Client ID and Client Secret from environment variables.
+   * Fetch song title, artist, album, duration, and artwork.
+   * Automatically find matching audio source from YouTube.
+   * Support playlists and albums.
+
+4. Queue System
+
+   * Unlimited queue.
+   * Auto-play next song.
+   * Queue persistence after restart.
+   * Multi-group support.
+
+5. Voice Chat Features
+
+   * Auto-join active voice chats.
+   * Auto-reconnect if disconnected.
+   * High-quality audio streaming.
+   * Low-latency playback.
+
+6. Security
+
+   * Store secrets in .env file.
+   * Never hardcode credentials.
+   * Admin-only controls for skip, stop, volume, and playlist management.
+
+7. Performance
+
+   * Async architecture.
+   * Efficient memory usage.
+   * Error handling and logging.
+   * Automatic recovery from failures.
+
+8. Project Structure
+
+   * config/
+   * database/
+   * handlers/
+   * helpers/
+   * services/
+   * voice/
+   * logs/
+   * main.py
+
+9. Deployment
+
+   * Docker support.
+   * Railway deployment.
+   * VPS deployment guide.
+   * Replit compatibility if possible.
+
+Environment Variables:
+SPOTIFY_CLIENT_ID=
+SPOTIFY_CLIENT_SECRET=
+API_ID=
+API_HASH=
+BOT_TOKEN=
+MONGO_URI=
+STRING_SESSION=
+
+Generate complete source code with comments, requirements.txt, Dockerfile, .env.example, deployment instructions, and detailed setup documentation.

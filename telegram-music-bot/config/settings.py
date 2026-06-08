@@ -1,0 +1,53 @@
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+
+class Settings:
+    # Telegram credentials
+    API_ID: int = int(os.getenv("API_ID", "0"))
+    API_HASH: str = os.getenv("API_HASH", "")
+    BOT_TOKEN: str = os.getenv("BOT_TOKEN", "")
+    STRING_SESSION: str = os.getenv("STRING_SESSION", "")
+
+    # Spotify credentials
+    SPOTIFY_CLIENT_ID: str = os.getenv("SPOTIFY_CLIENT_ID", "")
+    SPOTIFY_CLIENT_SECRET: str = os.getenv("SPOTIFY_CLIENT_SECRET", "")
+
+    # MongoDB
+    MONGO_URI: str = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+    DB_NAME: str = os.getenv("DB_NAME", "music_bot")
+
+    # Bot settings
+    MAX_QUEUE_SIZE: int = int(os.getenv("MAX_QUEUE_SIZE", "500"))
+    DEFAULT_VOLUME: int = int(os.getenv("DEFAULT_VOLUME", "100"))
+    AUDIO_QUALITY: str = os.getenv("AUDIO_QUALITY", "192")  # kbps
+    LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
+
+    # Admin user IDs (comma-separated)
+    ADMIN_IDS: list[int] = [
+        int(uid.strip())
+        for uid in os.getenv("ADMIN_IDS", "").split(",")
+        if uid.strip().isdigit()
+    ]
+
+    def validate(self) -> None:
+        """Raise an error if required settings are missing."""
+        missing = []
+        required = {
+            "API_ID": self.API_ID,
+            "API_HASH": self.API_HASH,
+            "BOT_TOKEN": self.BOT_TOKEN,
+            "STRING_SESSION": self.STRING_SESSION,
+            "SPOTIFY_CLIENT_ID": self.SPOTIFY_CLIENT_ID,
+            "SPOTIFY_CLIENT_SECRET": self.SPOTIFY_CLIENT_SECRET,
+            "MONGO_URI": self.MONGO_URI,
+        }
+        for key, value in required.items():
+            if not value or value == 0:
+                missing.append(key)
+        if missing:
+            raise EnvironmentError(
+                f"Missing required environment variables: {', '.join(missing)}"
+            )

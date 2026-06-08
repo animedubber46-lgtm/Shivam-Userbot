@@ -1,0 +1,39 @@
+version: "3.9"
+
+services:
+  bot:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./logs:/app/logs
+      - audio_cache:/tmp/musicbot
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - botnet
+
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_DATABASE: music_bot
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - botnet
+
+volumes:
+  mongo_data:
+  audio_cache:
+
+networks:
+  botnet:
+    driver: bridge

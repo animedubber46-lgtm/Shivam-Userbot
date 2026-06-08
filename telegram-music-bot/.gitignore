@@ -1,0 +1,28 @@
+# Environment — never commit secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# Pyrogram session files
+*.session
+*.session-journal
+session_generator.session*
+
+# Audio cache
+/tmp/musicbot/
+
+# Logs
+logs/*.log
+
+# IDE
+.vscode/
+.idea/
+
+# macOS
+.DS_Store
