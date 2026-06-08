@@ -31,7 +31,7 @@ def register_play_handlers(app: Client) -> None:
 
         tracks_to_add: list[dict] = []
 
-        # ── Detect Spotify URLs ───────────────────────────────────────────────
+        # ── Spotify URL → fetch rich metadata, then find audio on YouTube ─────
         sp_parsed = spotify.parse_spotify_url(query)
         if sp_parsed:
             sp_type, sp_id = sp_parsed
@@ -47,27 +47,27 @@ def register_play_handlers(app: Client) -> None:
                     await status_msg.edit("💿 Loading Spotify album…")
                     tracks_to_add = await spotify.get_album_tracks(sp_id)
             except Exception as exc:
-                logger.error(f"Spotify fetch error: {exc}")
-                await status_msg.edit("❌ Failed to fetch from Spotify. Trying plain search…")
-                sp_parsed = None  # fall through to text search
+                logger.warning(f"Spotify metadata fetch failed: {exc}")
+                # Fall through — treat it as a plain YouTube search
+                sp_parsed = None
 
-        # ── Plain text / YouTube search ───────────────────────────────────────
+        # ── Plain text → search YouTube directly (no Spotify needed) ──────────
         if not sp_parsed:
-            sp_track = await spotify.search_track(query)
-            if sp_track:
-                tracks_to_add = [sp_track]
+            await status_msg.edit("🔍 Searching YouTube…")
+            yt_results = await youtube.search(query, max_results=1)
+            if yt_results:
+                r = yt_results[0]
+                tracks_to_add = [{
+                    "title": r["title"],
+                    "artist": "YouTube",
+                    "duration": r["duration"],
+                    "album": "",
+                    "thumbnail": r.get("thumbnail", ""),
+                    "youtube_url": r["url"],
+                }]
             else:
-                yt_results = await youtube.search(query, max_results=1)
-                if yt_results:
-                    r = yt_results[0]
-                    tracks_to_add = [{
-                        "title": r["title"],
-                        "artist": "YouTube",
-                        "duration": r["duration"],
-                        "album": "",
-                        "thumbnail": r.get("thumbnail", ""),
-                        "youtube_url": r["url"],
-                    }]
+                await status_msg.edit("❌ No results found. Try a different search term.")
+                return
 
         if not tracks_to_add:
             await status_msg.edit("❌ No results found. Try a different search term.")
@@ -77,8 +77,11 @@ def register_play_handlers(app: Client) -> None:
         added_count = 0
 
         for meta in tracks_to_add:
+            # Use pre-resolved YouTube URL if available (plain-text search path)
             yt_url = meta.pop("youtube_url", None)
+
             if not yt_url:
+                # Spotify metadata path — find the matching YouTube video
                 yt_result = await youtube.find_for_track(meta["title"], meta["artist"])
                 if not yt_result:
                     logger.warning(f"No YouTube match for {meta['title']}")
@@ -130,7 +133,7 @@ def register_play_handlers(app: Client) -> None:
                         await status_msg.edit(caption)
                 else:
                     await status_msg.edit(
-                        "❌ Failed to join voice chat. Make sure a voice chat is active in this group."
+                        "❌ Failed to join voice chat. Make sure an active voice chat exists in this group."
                     )
         else:
             msg = (
