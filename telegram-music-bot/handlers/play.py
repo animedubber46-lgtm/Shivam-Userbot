@@ -9,12 +9,6 @@ from helpers.formatters import format_duration
 
 logger = logging.getLogger(__name__)
 
-NO_COOKIES_MSG = (
-    "⚠️ **YouTube is blocking audio extraction.**\n\n"
-    "This happens on server IPs without YouTube cookies.\n"
-    "Ask the bot admin to add `cookies.txt` — see the README for instructions."
-)
-
 
 def register_play_handlers(app: Client) -> None:
 
@@ -37,7 +31,7 @@ def register_play_handlers(app: Client) -> None:
 
         tracks_to_add: list[dict] = []
 
-        # ── Spotify URL → rich metadata, audio sourced from YouTube ──────────
+        # ── Spotify URL → rich metadata, audio sourced from SoundCloud ─────────
         sp_parsed = spotify.parse_spotify_url(query)
         if sp_parsed:
             sp_type, sp_id = sp_parsed
@@ -54,21 +48,21 @@ def register_play_handlers(app: Client) -> None:
                     tracks_to_add = await spotify.get_album_tracks(sp_id)
             except Exception as exc:
                 logger.warning(f"Spotify metadata fetch failed: {exc}")
-                sp_parsed = None  # fall through to YouTube search
+                sp_parsed = None  # fall through to SoundCloud search
 
-        # ── Plain text → search YouTube directly ──────────────────────────────
+        # ── Plain text → search SoundCloud directly ───────────────────────────
         if not sp_parsed:
-            await status_msg.edit("🔍 Searching YouTube…")
-            yt_results = await youtube.search(query, max_results=1)
-            if yt_results:
-                r = yt_results[0]
+            await status_msg.edit("🔍 Searching…")
+            sc_results = await youtube.search(query, max_results=1)
+            if sc_results:
+                r = sc_results[0]
                 tracks_to_add = [{
                     "title": r["title"],
-                    "artist": "YouTube",
+                    "artist": r.get("uploader", "Unknown"),
                     "duration": r["duration"],
                     "album": "",
                     "thumbnail": r.get("thumbnail", ""),
-                    "youtube_url": r["url"],
+                    "stream_url": r["stream_url"],  # already extracted by scsearch
                 }]
             else:
                 await status_msg.edit("❌ No results found. Try a different search term.")
@@ -80,22 +74,20 @@ def register_play_handlers(app: Client) -> None:
 
         state = voice_manager.get_state(chat_id)
         added_count = 0
-        cookies_error = False
 
         for meta in tracks_to_add:
-            yt_url = meta.pop("youtube_url", None)
+            # Use pre-extracted stream_url if present (plain-text path)
+            audio_url = meta.pop("stream_url", None)
 
-            if not yt_url:
-                yt_result = await youtube.find_for_track(meta["title"], meta["artist"])
-                if not yt_result:
-                    logger.warning(f"No YouTube match for {meta['title']}")
-                    continue
-                yt_url = yt_result["url"]
-
-            audio_url = await youtube.get_stream_url(yt_url)
+            # Spotify path: find audio on SoundCloud using track metadata
             if not audio_url:
-                cookies_error = True
-                continue
+                sc_result = await youtube.find_for_track(
+                    meta.get("title", ""), meta.get("artist", "")
+                )
+                if not sc_result:
+                    logger.warning(f"No SoundCloud match for {meta.get('title')}")
+                    continue
+                audio_url = sc_result["stream_url"]
 
             track = Track(
                 title=meta.get("title", "Unknown"),
@@ -111,11 +103,7 @@ def register_play_handlers(app: Client) -> None:
             added_count += 1
 
         if added_count == 0:
-            # Give a helpful error if the issue is cookies vs. a genuine miss
-            if cookies_error:
-                await status_msg.edit(NO_COOKIES_MSG)
-            else:
-                await status_msg.edit("❌ Could not find playable audio. Try a different query.")
+            await status_msg.edit("❌ Could not find playable audio. Try a different query.")
             return
 
         await db.set_queue(chat_id, [t.to_dict() for t in state.tracks])

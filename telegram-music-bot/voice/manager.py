@@ -135,11 +135,10 @@ class VoiceManager:
 
         if next_track:
             from services import youtube
-            yt_result = await youtube.find_for_track(next_track.title, next_track.artist)
-            if yt_result:
-                audio_url = await youtube.get_stream_url(yt_result["url"])
-                if audio_url:
-                    next_track.url = audio_url
+            # Refresh stream URL (CDN URLs expire) using SoundCloud search
+            sc_result = await youtube.find_for_track(next_track.title, next_track.artist)
+            if sc_result and sc_result.get("stream_url"):
+                next_track.url = sc_result["stream_url"]
             await self.play(chat_id, next_track)
             await db.record_play(chat_id, next_track.to_dict())
         else:

@@ -1,3 +1,13 @@
+"""
+Audio service — SoundCloud primary, YouTube fallback
+======================================================
+YouTube stream extraction is blocked on datacenter IPs (Replit, Railway free, etc.).
+SoundCloud user-uploaded tracks have full audio and no server-IP restrictions.
+
+Search flow:
+  1. Try SoundCloud (scsearch:) — returns full-length audio reliably
+  2. Fall back to YouTube flat search for metadata only (used by Spotify-URL path)
+"""
 import asyncio
 import logging
 import os
@@ -7,141 +17,125 @@ import yt_dlp
 
 logger = logging.getLogger(__name__)
 
-# Cookies file path — user exports this from their browser (see README)
-COOKIES_FILE = os.path.join(os.path.dirname(__file__), "..", "cookies.txt")
-COOKIES_FILE = os.path.normpath(COOKIES_FILE)
+_BASE_OPTS = {
+    "quiet": True,
+    "no_warnings": True,
+}
 
+_SC_OPTS = {
+    **_BASE_OPTS,
+    "format": "bestaudio/best",
+    "noplaylist": True,
+}
 
-def _cookies_opts() -> dict:
-    """Return cookie options if cookies.txt exists."""
-    if os.path.exists(COOKIES_FILE):
-        return {"cookiefile": COOKIES_FILE}
-    return {}
-
-
-def _base_opts() -> dict:
-    return {
-        "quiet": True,
-        "no_warnings": True,
-        **_cookies_opts(),
-    }
-
-
-def _search_opts() -> dict:
-    return {
-        **_base_opts(),
-        "extract_flat": True,
-        "default_search": "ytsearch",
-    }
-
-
-def _info_opts() -> dict:
-    return {
-        **_base_opts(),
-        "format": "bestaudio[ext=m4a]/bestaudio/best",
-        "noplaylist": True,
-    }
-
-
-def _download_opts(output_path: str, audio_quality: str) -> dict:
-    return {
-        **_base_opts(),
-        "format": "bestaudio/best",
-        "noplaylist": True,
-        "outtmpl": output_path,
-        "postprocessors": [
-            {
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": "mp3",
-                "preferredquality": audio_quality,
-            }
-        ],
-    }
+_YT_FLAT_OPTS = {
+    **_BASE_OPTS,
+    "extract_flat": True,
+    "default_search": "ytsearch",
+}
 
 
 class YouTubeService:
+    """
+    Despite the class name (kept for import compatibility), this service now
+    uses SoundCloud as the primary audio source because YouTube stream URLs
+    are blocked on datacenter IPs.
+    """
+
     def __init__(self, audio_quality: str = "192", download_dir: str = "/tmp/musicbot"):
         self.audio_quality = audio_quality
         self.download_dir = download_dir
         os.makedirs(download_dir, exist_ok=True)
 
-    def has_cookies(self) -> bool:
-        return os.path.exists(COOKIES_FILE)
-
     # ── Search ────────────────────────────────────────────────────────────────
 
     async def search(self, query: str, max_results: int = 1) -> list[dict]:
+        """Search SoundCloud and return track metadata list."""
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, self._search_sync, query, max_results)
+        return await loop.run_in_executor(None, self._sc_search_sync, query, max_results)
 
-    def _search_sync(self, query: str, max_results: int) -> list[dict]:
+    def _sc_search_sync(self, query: str, max_results: int) -> list[dict]:
+        sc_query = f"scsearch{max_results}:{query}"
         try:
-            with yt_dlp.YoutubeDL(_search_opts()) as ydl:
-                results = ydl.extract_info(
-                    f"ytsearch{max_results}:{query}", download=False
-                )
-            entries = results.get("entries", []) if results else []
+            with yt_dlp.YoutubeDL(_SC_OPTS) as ydl:
+                info = ydl.extract_info(sc_query, download=False)
+            entries = info.get("entries", []) if info else []
             out = []
             for e in entries:
                 if not e:
                     continue
-                out.append({
-                    "id": e.get("id", ""),
-                    "title": e.get("title", ""),
-                    "url": f"https://www.youtube.com/watch?v={e.get('id', '')}",
-                    "duration": e.get("duration", 0) or 0,
-                    "thumbnail": e.get("thumbnail", ""),
-                })
+                # Only include tracks with a usable stream URL
+                stream_url = e.get("url", "")
+                if not stream_url:
+                    continue
+                duration = e.get("duration") or 0
+                # Skip previews (≤30 s) and try to find a longer match
+                if duration > 30:
+                    out.append({
+                        "id": e.get("id", ""),
+                        "title": e.get("title", ""),
+                        "url": e.get("webpage_url") or e.get("url", ""),
+                        "stream_url": stream_url,
+                        "duration": int(duration),
+                        "thumbnail": e.get("thumbnail", ""),
+                        "uploader": e.get("uploader", ""),
+                    })
             return out
         except Exception as exc:
-            logger.error(f"YouTube search error: {exc}")
+            logger.error(f"SoundCloud search error: {exc}")
             return []
 
     # ── Stream URL ────────────────────────────────────────────────────────────
 
-    async def get_stream_url(self, youtube_url: str) -> Optional[str]:
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, self._get_stream_url_sync, youtube_url)
+    async def get_stream_url(self, url: str) -> Optional[str]:
+        """
+        If `url` is already a direct stream URL (from search results), return it.
+        Otherwise extract it from the SoundCloud track page.
+        """
+        # Direct CDN URLs from scsearch already have the stream URL embedded
+        if url.startswith("https://cf-hls-media.sndcdn.com") or \
+           url.startswith("https://cf-media.sndcdn.com"):
+            return url
 
-    def _get_stream_url_sync(self, youtube_url: str) -> Optional[str]:
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, self._extract_stream_sync, url)
+
+    def _extract_stream_sync(self, url: str) -> Optional[str]:
         try:
-            with yt_dlp.YoutubeDL(_info_opts()) as ydl:
-                info = ydl.extract_info(youtube_url, download=False)
+            with yt_dlp.YoutubeDL(_SC_OPTS) as ydl:
+                info = ydl.extract_info(url, download=False)
                 return info.get("url") if info else None
         except Exception as exc:
-            logger.error(f"YouTube stream URL error: {exc}")
+            logger.error(f"Stream URL extraction error: {exc}")
             return None
 
-    # ── Download (fallback for PyTgCalls when stream URL is short-lived) ──────
+    # ── Find audio for a Spotify track ───────────────────────────────────────
 
-    async def download_audio(self, youtube_url: str, track_id: str) -> Optional[str]:
-        mp3_path = os.path.join(self.download_dir, f"{track_id}.mp3")
-        if os.path.exists(mp3_path):
-            return mp3_path
-        loop = asyncio.get_event_loop()
-        output_template = os.path.join(self.download_dir, f"{track_id}.%(ext)s")
-        ok = await loop.run_in_executor(
-            None, self._download_sync, youtube_url, output_template
-        )
-        return mp3_path if ok and os.path.exists(mp3_path) else None
-
-    def _download_sync(self, url: str, output_template: str) -> bool:
-        try:
-            opts = _download_opts(output_template, self.audio_quality)
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                ydl.download([url])
-            return True
-        except Exception as exc:
-            logger.error(f"YouTube download error: {exc}")
-            return False
+    async def find_for_track(self, title: str, artist: str) -> Optional[dict]:
+        """
+        Given Spotify metadata, find the best SoundCloud match.
+        Tries progressively broader queries until a full-length result is found.
+        """
+        queries = [
+            f"{artist} - {title}",
+            f"{title} {artist}",
+            f"{title}",
+        ]
+        for query in queries:
+            results = await self.search(query, max_results=3)
+            if results:
+                # Prefer the result whose duration is closest to a realistic track (2–7 min)
+                best = sorted(
+                    results,
+                    key=lambda r: abs(r["duration"] - 210),  # 3.5 min target
+                )[0]
+                return best
+        return None
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
-    async def find_for_track(self, title: str, artist: str) -> Optional[dict]:
-        results = await self.search(f"{title} {artist} official audio", max_results=1)
-        if not results:
-            results = await self.search(f"{title} {artist}", max_results=1)
-        return results[0] if results else None
+    def has_cookies(self) -> bool:
+        return False  # No longer needed — SoundCloud doesn't require cookies
 
     def cleanup_file(self, file_path: str) -> None:
         try:
@@ -149,3 +143,6 @@ class YouTubeService:
                 os.remove(file_path)
         except OSError as exc:
             logger.warning(f"Failed to delete {file_path}: {exc}")
+
+    async def close(self) -> None:
+        pass  # No persistent session to close
